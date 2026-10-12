@@ -45,7 +45,133 @@ public class App
         return copy;
     }
 
-    private static HashMap<String, ArrayList<String>> PermuteTeams(String permutedPlayer, String permutedGame, ArrayList<String> allPlayers, HashMap<String, ArrayList<String>> gamePlayers, Integer teamCount, ArrayList<String> placedPlayers, ArrayList<String> includedGames, HashMap<String, ArrayList<String>> currentBestAssignment, HashMap<String, ArrayList<String>> playerGames, HashMap<String, Integer> scores, int layer) {
+    private static ArrayList<HashMap<String, ArrayList<String>>> PermuteTeams(String permutedPlayer, String permutedGame, ArrayList<String> allPlayers, HashMap<String, ArrayList<String>> gamePlayers, Integer teamCount, ArrayList<String> placedPlayers, ArrayList<String> includedGames, HashMap<String, ArrayList<String>> currentBestAssignment, HashMap<String, ArrayList<String>> playerGames, HashMap<String, Integer> scores, int layer, Integer bestScore) {
+        int remainingAssignments = Math.floorDiv(allPlayers.size()+placedPlayers.size(),teamCount);
+        HashMap<String, Integer> scoreSet = new HashMap<>();
+        HashMap<String, Integer> countSet = new HashMap<>();
+        for (String game : gamePlayers.keySet()) {
+            if (!"No Game".equals(game)) {
+                for (int i = 0; i < gamePlayers.get(game).size(); i++) {
+                    if (scoreSet.containsKey(game)) {
+                        countSet.put(game, countSet.get(game)+1);
+                    }
+                    else {
+                        scoreSet.put(game, scores.get(game));
+                        countSet.put(game, 1);
+                    }
+                }
+            }
+        }
+        ArrayList<String> notIncludedGames = new ArrayList<>();
+        for (String game : includedGames) {
+            if (!"No Game".equals(game)) {
+                if (!currentBestAssignment.containsKey(game)) {
+                    notIncludedGames.add(game);
+                }
+                else {
+                    for (int i = 0; i < currentBestAssignment.get(game).size(); i++) {
+                        if (scoreSet.containsKey(game)) {
+                            countSet.put(game, countSet.get(game)+1);
+                        }
+                        else {
+                            scoreSet.put(game, scores.get(game));
+                            countSet.put(game, 1);
+                        }
+                    }
+                }
+            } 
+        }
+        includedGames.removeAll(notIncludedGames);
+        int maxScore = -100 * (allPlayers.size() + placedPlayers.size());
+        for (String game : includedGames) {
+            int playersForGame = currentBestAssignment.get(game).size();
+            if (playersForGame == 0) {
+                continue;
+            }
+            int gamePlayersPerTeam;
+            if (playersForGame % teamCount == 0) {
+                gamePlayersPerTeam = playersForGame / teamCount;
+            }
+            else {
+                gamePlayersPerTeam = Math.floorDiv(playersForGame, teamCount) + 1;
+            }
+            maxScore += (100 + scores.get(game)) * gamePlayersPerTeam * teamCount;
+            remainingAssignments -= gamePlayersPerTeam;
+            if (!"No Game".equals(game)) {
+                countSet.put(game, countSet.get(game)-playersForGame);
+                if (countSet.get(game) < teamCount) {
+                    scoreSet.remove(game);
+                    countSet.remove(game);
+                }
+            }
+        }
+        for (int assignment = 0; assignment < remainingAssignments; assignment++) {
+            boolean foundValue = false;
+            String addedGame = "";
+            int addedScore = -100000;
+            while (!foundValue) {
+                if (countSet.size() == 0) {
+                    foundValue = true;
+                    continue;
+                }
+                addedGame = Collections.max(scoreSet.entrySet(), Map.Entry.comparingByValue()).getKey();
+                addedScore = scoreSet.get(addedGame);
+                if (countSet.get(addedGame) < 0) {
+                    if (layer+1 <= (placedPlayers.size() + allPlayers.size())/6) {
+                        String tab = "   ";
+                        String tabs = "";
+                        for (int i = 0; i < layer+1; i++) {
+                            tabs += tab;
+                        }
+                        System.out.println(tabs+"Layer "+(layer+1)+" Unable To Create Perfect Match");
+                        ArrayList<HashMap<String, ArrayList<String>>> result = new ArrayList<>();
+                        result.add(new HashMap<>());
+                        result.add(new HashMap<>());
+                        return result;
+                    }
+                }
+                if (countSet.get(addedGame) < teamCount) {
+                    scoreSet.remove(addedGame);
+                    countSet.remove(addedGame);
+                }
+                else {
+                    foundValue = true;
+                }
+            }
+            if (scoreSet.size() > 0 && addedScore >= -100) {
+                maxScore += addedScore * teamCount;
+                maxScore += 100 * teamCount;
+                if (countSet.get(addedGame) == teamCount) {
+                    scoreSet.remove(addedGame);
+                    countSet.remove(addedGame);
+                }
+                else {
+                    countSet.put(addedGame, countSet.get(addedGame)-teamCount);
+                }
+            }
+        }
+        if (maxScore <= bestScore) {
+            if (layer+1 <= (placedPlayers.size() + allPlayers.size())/6) {
+                String tab = "   ";
+                String tabs = "";
+                for (int i = 0; i < layer+1; i++) {
+                    tabs += tab;
+                }
+                System.out.println(tabs+"Layer "+(layer+1)+" Unable To Exceed Best Score "+bestScore);
+            }
+            ArrayList<HashMap<String, ArrayList<String>>> result = new ArrayList<>();
+            result.add(new HashMap<>());
+            result.add(new HashMap<>());
+            return result;
+        }
+        else if (layer+1 <= (placedPlayers.size() + allPlayers.size())/6) {
+            String tab = "   ";
+            String tabs = "";
+            for (int i = 0; i < layer+1; i++) {
+                tabs += tab;
+            }
+            System.out.println(tabs+"Layer "+(layer+1)+" has Max Score "+maxScore+"; the Best Score is currently "+bestScore);
+        }
         if (currentBestAssignment.containsKey(permutedGame)) {
             currentBestAssignment.get(permutedGame).add(permutedPlayer);
         } else {
@@ -59,15 +185,15 @@ public class App
         }
         allPlayers.remove(permutedPlayer);
         for (String game : currentBestAssignment.keySet()) {
-            if (game != permutedGame) {
+            if (!game.equals(permutedGame)) {
                 currentBestAssignment.get(game).remove(permutedPlayer);
             }
         }
         if (!includedGames.contains(permutedGame)) {
             includedGames.add(permutedGame);
         }
-        HashMap<String, ArrayList<String>> resultTeam = GetBestTeamLineup(allPlayers, gamePlayers, teamCount, placedPlayers, includedGames,currentBestAssignment, playerGames, scores, layer+1);
-        return resultTeam;
+        ArrayList<HashMap<String, ArrayList<String>>> result = GetBestTeamLineup(allPlayers, gamePlayers, teamCount, placedPlayers, includedGames,currentBestAssignment, playerGames, scores, layer+1, bestScore);
+        return result;
     }
 
     private static int GetScore(HashMap<String, ArrayList<String>> team, HashMap<String, Integer> scores, Integer totalPlayerCount) {
@@ -75,9 +201,11 @@ public class App
         int size;
         int totalScore = 0;
         for (String game : team.keySet()) {
-            size = team.get(game).size();
-            playerCount += size;
-            totalScore += scores.get(game) * size;
+            if (!game.equals("No Game")) {
+                size = team.get(game).size();
+                playerCount += size;
+                totalScore += scores.get(game) * size;
+            }
         }
         if (totalPlayerCount > playerCount) {
             totalScore -= 100 * (totalPlayerCount - playerCount);
@@ -85,11 +213,13 @@ public class App
         return totalScore;
     }
 
-    private static HashMap<String, ArrayList<String>> GetBestTeamLineup(ArrayList<String> allPlayers, HashMap<String, ArrayList<String>> gamePlayers, Integer teamCount, ArrayList<String> placedPlayers, ArrayList<String> includedGames, HashMap<String, ArrayList<String>> currentBestAssignment, HashMap<String, ArrayList<String>> playerGames, HashMap<String, Integer> scores, int layer) {
+    private static ArrayList<HashMap<String, ArrayList<String>>> GetBestTeamLineup(ArrayList<String> allPlayers, HashMap<String, ArrayList<String>> gamePlayers, Integer teamCount, ArrayList<String> placedPlayers, ArrayList<String> includedGames, HashMap<String, ArrayList<String>> currentBestAssignment, HashMap<String, ArrayList<String>> playerGames, HashMap<String, Integer> scores, int layer, Integer bestScore) {
         boolean gameAssigned;
-        boolean finalOutputFound = false;
+        boolean finalOutputFound = (placedPlayers.size() + allPlayers.size() == 0);
         HashMap<String, ArrayList<String>> oldBestAssignment;
-        if (layer <= (placedPlayers.size() + allPlayers.size())/6) {
+        boolean printLayer = (layer <= (placedPlayers.size() + allPlayers.size())/6);
+        boolean invalid = false;
+        if (printLayer) {
             String tab = "   ";
             String tabs = "";
             for (int i = 0; i < layer; i++) {
@@ -98,28 +228,35 @@ public class App
             System.out.println(tabs+"Starting Layer "+layer);
         }
 
-        while (!finalOutputFound) {
+        while (!finalOutputFound && !invalid) {
             oldBestAssignment = copyLists(currentBestAssignment);
             gameAssigned = false;
             allPlayers.removeAll(placedPlayers);
+
+            // If a game has no remaining players and an incomplete set, reject this iteration
+            for (String game : currentBestAssignment.keySet()) {
+                if (currentBestAssignment.get(game).size() % teamCount != 0) {
+                    if (!gamePlayers.containsKey(game)) {
+                        invalid = true;
+                        continue;
+                    }
+                    if (gamePlayers.get(game).size() == 0) {
+                        invalid = true;
+                        continue;
+                    }
+                }
+            }
+            if (invalid) {
+                continue;
+            }
+
             // If allPlayers is empty, return incomplete games to No Game and end
             if (allPlayers.size() == 0) {
                 for (String game : includedGames) {
                     while (currentBestAssignment.get(game).size() % teamCount != 0) {
                         String randomPlayer = currentBestAssignment.get(game).get(new Random().nextInt(currentBestAssignment.get(game).size()));
                         currentBestAssignment.get(game).remove(randomPlayer);
-                        if (!currentBestAssignment.containsKey("No Game")) {
-                            ArrayList<String> newNoGame = new ArrayList<>();
-                            newNoGame.add(randomPlayer);
-                            currentBestAssignment.put("No Game", newNoGame);
-                        } else if (currentBestAssignment.get("No Game").equals(null)) {
-                            ArrayList<String> newNoGame = new ArrayList<>();
-                            newNoGame.add(randomPlayer);
-                            currentBestAssignment.put("No Game", newNoGame);
-                        }
-                        else {
-                            currentBestAssignment.get("No Game").add(randomPlayer);
-                        }
+                        currentBestAssignment.get("No Game").add(randomPlayer);
                     }
                 }
                 finalOutputFound = true;
@@ -128,8 +265,8 @@ public class App
             // If allPlayers has size under teamCount and all games are complete, end
             if (allPlayers.size() < teamCount) {
                 boolean allValid = true;
-                for (String game : includedGames) {
-                    if (currentBestAssignment.get(game).size() % teamCount != 0) {
+                for (String game : currentBestAssignment.keySet()) {
+                    if (currentBestAssignment.get(game).size() % teamCount != 0 && !"No Game".equals(game)) {
                         allValid = false;
                     }
                 }
@@ -147,11 +284,16 @@ public class App
                     boolean spaceExists = true;
                     ArrayList<String> listForGame = new ArrayList<>();
                     String gameForPlayer = playerGames.get(player).get(0);
+                    if (!gamePlayers.containsKey(gameForPlayer)) {
+                        invalid = true;
+                        continue;
+                    }
                     if (currentBestAssignment.containsKey(gameForPlayer)) {
                         listForGame = currentBestAssignment.get(gameForPlayer);
-                        if (listForGame.size() + teamCount > gamePlayers.get(gameForPlayer).size() && listForGame.size() % teamCount == 0) {
-                            spaceExists = false;
-                        }
+                        int alreadyAssigned = listForGame.size();
+                        int currentlyEligible = gamePlayers.get(gameForPlayer).size();
+                        int requiredOtherPlayersToCompleteGame = teamCount - ((alreadyAssigned + 1) % teamCount) % teamCount;
+                        spaceExists = (requiredOtherPlayersToCompleteGame <= (currentlyEligible - 1));
                     }
                     if (spaceExists) {
                         listForGame.add(player);
@@ -159,19 +301,19 @@ public class App
                         if (!includedGames.contains(gameForPlayer)) {
                             includedGames.add(gameForPlayer);
                         }
-                    }
-                    placedPlayers.add(player);
-                    allPlayers.remove(player);
-                    gamePlayers.get(gameForPlayer).remove(player);
-                    for (String game : currentBestAssignment.keySet()) {
-                        if (game != gameForPlayer) {
-                            currentBestAssignment.get(game).remove(player);
+                        placedPlayers.add(player);
+                        allPlayers.remove(player);
+                        gamePlayers.get(gameForPlayer).remove(player);
+                        for (String game : currentBestAssignment.keySet()) {
+                            if (!game.equals(gameForPlayer)) {
+                                currentBestAssignment.get(game).remove(player);
+                            }
                         }
+                        gameAssigned = true;
                     }
-                    gameAssigned = true;
                 }
             }
-            if (gameAssigned) {
+            if (gameAssigned || invalid) {
                 continue;
             }
 
@@ -185,7 +327,7 @@ public class App
                         playerList.remove(player);
                     }
                     for (String gameIterate : currentBestAssignment.keySet()) {
-                        if (gameIterate != game) {
+                        if (!gameIterate.equals(game)) {
                             currentBestAssignment.get(gameIterate).remove(player);
                         }
                     }
@@ -200,6 +342,7 @@ public class App
             int minimumRemaining = 2;
             ArrayList<String> permutingPlayers = new ArrayList<>();
             while (!gameAssigned) {
+                int oldBestScore = bestScore;
                 for (String player : allPlayers) {
                     if (playerGames.get(player).size() == minimumRemaining) {
                         permutingPlayers.add(player);
@@ -213,8 +356,8 @@ public class App
                     finalOutputFound = true;
                 }
                 gameAssigned = true;
-                int bestScore = -100 * (allPlayers.size() + placedPlayers.size());
                 HashMap<String, ArrayList<String>> bestTeam = new HashMap<>();
+                HashMap<String, ArrayList<String>> bestGamePlayers = new HashMap<>();
                 ArrayList<String> everyPlayer = new ArrayList<>();
                 everyPlayer.addAll(allPlayers);
                 everyPlayer.addAll(placedPlayers);
@@ -233,53 +376,93 @@ public class App
                     ArrayList<String> newIncludedGames = new ArrayList<>();
                     newIncludedGames.addAll(includedGames);
                     HashMap<String, ArrayList<String>> newCurrentBestAssignment = copyLists(currentBestAssignment);
-                    HashMap<String, ArrayList<String>> newPlayerGames = copyLists(playerGames);
-                    HashMap<String, Integer> newScores = new HashMap<>();
-                    newScores.putAll(scores);
 
-                    HashMap<String, ArrayList<String>> resultTeam = PermuteTeams(playerToCheck, game, newAllPlayers, newGamePlayers, newTeamCount, newPlacedPlayers, newIncludedGames, newCurrentBestAssignment, newPlayerGames, newScores, layer);
-                    int resultScore = GetScore(resultTeam, scores, placedPlayers.size() + allPlayers.size());
+                    ArrayList<HashMap<String, ArrayList<String>>> results = PermuteTeams(playerToCheck, game, newAllPlayers, newGamePlayers, newTeamCount, newPlacedPlayers, newIncludedGames, newCurrentBestAssignment, playerGames, scores, layer, bestScore);
+                    HashMap<String, ArrayList<String>> resultTeam = results.get(0);
+                    HashMap<String, ArrayList<String>> resultGamePlayers = results.get(1);
+                    int resultScore = GetScore(resultTeam, scores, everyPlayer.size());
                     if (resultScore > bestScore) {
                         bestScore = resultScore;
                         bestTeam = resultTeam;
+                        bestGamePlayers = resultGamePlayers;
                     }
                 }
                 if (AreAssignmentsSame(currentBestAssignment, bestTeam)) {
                     finalOutputFound = true;
                     continue;
                 }
-                currentBestAssignment = bestTeam;
-                includedGames = new ArrayList<>();
-                includedGames.addAll(currentBestAssignment.keySet());
-                includedGames.remove("No Game");
-                placedPlayers = new ArrayList<>();
-                allPlayers = new ArrayList<>();
-                for (String game : currentBestAssignment.keySet()) {
-                    if (game.equals("No Game")) {
-                        allPlayers.addAll(currentBestAssignment.get(game));
-                    }
-                    else {
-                        placedPlayers.addAll(currentBestAssignment.get(game));
+                if (bestScore > oldBestScore) {
+                    currentBestAssignment = bestTeam;
+                    gamePlayers = bestGamePlayers;
+                    includedGames = new ArrayList<>();
+                    includedGames.addAll(currentBestAssignment.keySet());
+                    includedGames.remove("No Game");
+                    placedPlayers = new ArrayList<>();
+                    allPlayers = new ArrayList<>();
+                    for (String game : currentBestAssignment.keySet()) {
+                        if (game.equals("No Game")) {
+                            allPlayers.addAll(currentBestAssignment.get(game));
+                        }
+                        else {
+                            placedPlayers.addAll(currentBestAssignment.get(game));
+                        }
                     }
                 }
             }
             if (oldBestAssignment.equals(currentBestAssignment)) {
+                for (String game : oldBestAssignment.keySet()) {
+                    ArrayList<String> players = oldBestAssignment.get(game);
+                    if (players.size() % teamCount != 0) {
+                        String randomPlayer = currentBestAssignment.get(game).get(new Random().nextInt(currentBestAssignment.get(game).size()));
+                        currentBestAssignment.get(game).remove(randomPlayer);
+                        currentBestAssignment.get("No Game").add(randomPlayer);
+                    }
+                }
                 finalOutputFound = true;
                 continue;
             }
         }
-        if (layer <= (placedPlayers.size() + allPlayers.size())/6) {
+        // If a game has no remaining players and an incomplete set, reject this iteration
+        if (invalid) {
+            if (printLayer) {
+                String tab = "   ";
+                String tabs = "";
+                for (int i = 0; i < layer; i++) {
+                    tabs += tab;
+                }
+                System.out.println(tabs+"Finishing Layer "+layer+"; Invalid Configuration");
+            }
+            currentBestAssignment = new HashMap<>();
+            ArrayList<String> everyPlayer = new ArrayList<>();
+            everyPlayer.addAll(allPlayers);
+            everyPlayer.addAll(placedPlayers);
+            currentBestAssignment.put("No Game", everyPlayer);
+            gamePlayers = new HashMap<>();
+            ArrayList<HashMap<String, ArrayList<String>>> result = new ArrayList<>();
+            result.add(currentBestAssignment);
+            result.add(gamePlayers);
+            return result;
+        }
+        if (printLayer) {
             String tab = "   ";
             String tabs = "";
             for (int i = 0; i < layer; i++) {
                 tabs += tab;
             }
-            System.out.println(tabs+"Finishing Layer "+layer+"; Best Score = "+GetScore(currentBestAssignment, scores, placedPlayers.size() + allPlayers.size()));
+            if (placedPlayers.size() + allPlayers.size() == 0) {
+                System.out.println(tabs+"Finishing Layer "+layer+"; Invalid Configuration");
+            }
+            else {
+                System.out.println(tabs+"Finishing Layer "+layer+"; Best Score = "+GetScore(currentBestAssignment, scores, placedPlayers.size() + allPlayers.size()));
+            }
         }
-        return currentBestAssignment;
+        ArrayList<HashMap<String, ArrayList<String>>> result = new ArrayList<>();
+        result.add(currentBestAssignment);
+        result.add(gamePlayers);
+        return result;
     }
 
-    private static HashMap<String, ArrayList<String>> DetermineTeams(ArrayList<String> allPlayers, HashMap<String, ArrayList<String>> gamePlayers, HashMap<String, Integer> playCount, Integer teamCount) {
+    private static HashMap<String, ArrayList<String>> DetermineTeams(ArrayList<String> allPlayers, HashMap<String, ArrayList<String>> gamePlayers, HashMap<String, Integer> playCount, Integer teamCount, Integer bestScore) {
         // If a game has a single player, remove it
         ArrayList<String> gamesToRemove = new ArrayList<>();
         for (String game : gamePlayers.keySet()) {
@@ -323,7 +506,7 @@ public class App
         currentBestAssignment.put("No Game", allPlayers);
         
         // Determine the best scoring setup
-        return GetBestTeamLineup(allPlayers, gamePlayers, teamCount, new ArrayList<>(), new ArrayList<>(), currentBestAssignment, playerGames, scores, 0);
+        return GetBestTeamLineup(allPlayers, gamePlayers, teamCount, new ArrayList<>(), new ArrayList<>(), currentBestAssignment, playerGames, scores, 0, bestScore).get(0);
     }
 
     public static void main( String[] args )
@@ -364,7 +547,28 @@ public class App
             }
             
             // Determine the optimal teams
-            HashMap<String, ArrayList<String>> optimalTeams = DetermineTeams(allPlayers, gamePlayers, playCount, teamCount);
+            HashMap<String, ArrayList<String>> optimalTeams = DetermineTeams(allPlayers, gamePlayers, playCount, teamCount, -10000*allPlayers.size());
+            ArrayList<String> noGamePlayers = new ArrayList<>();
+            noGamePlayers.addAll(allPlayers);
+            for (ArrayList<String> players : optimalTeams.values()) {
+                for (String player : players) {
+                    noGamePlayers.remove(player);
+                }
+            }
+            for (String player : noGamePlayers) {
+                if (!optimalTeams.containsKey("No Game")) {
+                    ArrayList<String> newNoGame = new ArrayList<>();
+                    newNoGame.add(player);
+                    optimalTeams.put("No Game", newNoGame);
+                } else if (optimalTeams.get("No Game").equals(null)) {
+                    ArrayList<String> newNoGame = new ArrayList<>();
+                    newNoGame.add(player);
+                    optimalTeams.put("No Game", newNoGame);
+                }
+                else {
+                    optimalTeams.get("No Game").add(player);
+                }
+            }
             ArrayList<String> emptyGames = new ArrayList<>();
             for (String game : optimalTeams.keySet()) {
                 if (optimalTeams.get(game).size() == 0) {
